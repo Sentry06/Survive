@@ -1,0 +1,91 @@
+-- MatchStats.server
+-- Cria stats e atributos da RUN (resetam a cada entrada)
+-- Suporte a GOLD + LUCK + BANISH + REROLL
+
+local Players = game:GetService("Players")
+local XPService = require(game.ServerScriptService:WaitForChild("XPService"))
+
+-- =========================
+-- HELPERS
+-- =========================
+local function createInt(parent, name, value)
+	local v = Instance.new("IntValue")
+	v.Name = name
+	v.Value = value
+	v.Parent = parent
+	return v
+end
+
+local function createNumber(parent, name, value)
+	local v = Instance.new("NumberValue")
+	v.Name = name
+	v.Value = value
+	v.Parent = parent
+	return v
+end
+
+-- =========================
+-- PLAYER SETUP
+-- =========================
+Players.PlayerAdded:Connect(function(player)
+
+	-- =========================
+	-- 📊 STATS DA RUN
+	-- =========================
+	local matchStats = Instance.new("Folder")
+	matchStats.Name = "MatchStats"
+	matchStats.Parent = player
+
+	createInt(matchStats, "Level", 1)
+	createInt(matchStats, "XP", 0)
+	createInt(matchStats, "XPToNext", XPService:GetXPRequired(1))
+
+	-- =========================
+	-- 💰 ECONOMIA DA RUN
+	-- =========================
+	createInt(matchStats, "Gold", 0)     -- 🧰 baús / chefes
+	createInt(matchStats, "Banish", 1)   -- ❌ remover upgrade
+	createInt(matchStats, "Reroll", 1)   -- 🔁 sortear de novo
+
+	-- =========================
+	-- GOLD
+	-- =========================
+	local gold = Instance.new("NumberValue")
+	gold.Name = "Gold"
+	gold.Value = 0
+	gold.Parent = matchStats
+
+	-- =========================
+	-- ⚔️ ATRIBUTOS DA RUN
+	-- =========================
+	local attributes = Instance.new("Folder")
+	attributes.Name = "Attributes"
+	attributes.Parent = matchStats
+
+	-- Multiplicadores globais
+	createNumber(attributes, "Damage", 1)
+	createNumber(attributes, "Cooldown", 1)
+	createNumber(attributes, "Range", 1.15)
+	createNumber(attributes, "ProjectileSpeed", 1)
+	createNumber(attributes, "AttackSize", 1)
+	createNumber(attributes, "MovementSpeed", 1)
+	
+	-- Combate
+	createNumber(attributes, "MultiAttack", 1)
+	createNumber(attributes, "ProjectilePierce", 0)
+	createNumber(attributes, "AreaDamage", 0)
+
+	-- 🛡️ SHIELD (DEFESA)
+	createNumber(attributes, "Shield", 20)           -- Shield base inicial
+	createNumber(attributes, "CurrentShield", 20)   -- Começa cheio
+	createNumber(attributes, "ShieldRegenDelay", 30)
+	
+	-- ❤️ VIDA
+	createNumber(attributes, "MaxHP", 1)      -- multiplicador
+	createNumber(attributes, "LifeRegen", 0)  -- por segundo (usaremos depois)
+
+	-- 🔮 SORTE (RARIDADE)
+	createNumber(attributes, "Luck", 0)
+
+	print("📊 MatchStats (RUN) criado para", player.Name)
+end)

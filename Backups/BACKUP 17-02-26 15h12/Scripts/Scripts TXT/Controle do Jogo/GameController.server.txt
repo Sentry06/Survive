@@ -1,0 +1,167 @@
+-- GameController.server
+-- Controle global de jogo + pause + collision groups + MaxHP
+-- VERSÃO FINAL ESTÁVEL
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local PhysicsService = game:GetService("PhysicsService")
+local RunService = game:GetService("RunService")
+
+-- =========================
+-- GAME STATE (FONTE ÚNICA)
+-- =========================
+local GameState = ReplicatedStorage:WaitForChild("GameState")
+local GamePaused = GameState:WaitForChild("GamePaused")
+
+GamePaused.Value = false
+_G.GameStarted = false
+
+-- =========================
+-- COLLISION GROUPS
+-- =========================
+local PLAYER_GROUP = "Players"
+
+pcall(function()
+	PhysicsService:RegisterCollisionGroup(PLAYER_GROUP)
+end)
+
+PhysicsService:CollisionGroupSetCollidable(PLAYER_GROUP, PLAYER_GROUP, false)
+
+local function applyCollisionGroup(character)
+	for _, obj in ipairs(character:GetDescendants()) do
+		if obj:IsA("BasePart") then
+			obj.CollisionGroup = PLAYER_GROUP
+		end
+	end
+end
+
+-- =========================
+-- FREEZE / UNFREEZE
+-- =========================
+local function freezePlayer(player, frozen)
+	local char = player.Character
+	if not char then return end
+
+	local humanoid = char:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+
+	if frozen then
+		humanoid:SetAttribute("Frozen", true)
+		humanoid.JumpPower = 0
+	else
+		humanoid:SetAttribute("Frozen", false)
+		humanoid.JumpPower = 50
+	end
+end
+
+-- =========================
+-- GLOBAL PAUSE API
+-- =========================
+function _G.SetGamePaused(paused)
+	if GamePaused.Value == paused then return end
+
+	GamePaused.Value = paused
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		freezePlayer(player, paused)
+	end
+
+	print(paused and "⏸️ JOGO PAUSADO" or "▶ JOGO RETOMADO")
+end
+
+-- =========================
+-- MAX HP APLICATION
+-- =========================
+local function applyMaxHP(player)
+	local char = player.Character
+	if not char then return end
+
+	local humanoid = char:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+
+	local ms = player:FindFirstChild("MatchStats")
+	if not ms then return end
+
+	local attrs = ms:FindFirstChild("Attributes")
+	if not attrs then return end
+
+	local maxHP = attrs:FindFirstChild("MaxHP")
+	if not maxHP then return end
+
+	-- salva o valor base uma única vez
+	if humanoid:GetAttribute("BaseMaxHealth") == nil then
+		humanoid:SetAttribute("BaseMaxHealth", humanoid.MaxHealth)
+	end
+
+	local base = humanoid:GetAttribute("BaseMaxHealth")
+	local ratio = humanoid.Health / humanoid.MaxHealth
+
+	humanoid.MaxHealth = math.floor(base * maxHP.Value)
+	humanoid.Health = math.max(1, humanoid.MaxHealth * ratio)
+end
+
+-- =========================
+-- PLAYER HANDLING
+-- =========================
+Players.PlayerAdded:Connect(function(player)
+	player.CharacterAdded:Connect(function(character)
+		applyCollisionGroup(character)
+
+		if not _G.GameStarted then
+			_G.GameStarted = true
+			GamePaused.Value = false
+			print("✅ PARTIDA INICIADA")
+		end
+
+		if GamePaused.Value then
+			freezePlayer(player, true)
+		end
+
+		-- aplica MaxHP ao nascer
+		task.wait() -- garante MatchStats já criado
+		applyMaxHP(player)
+
+		-- hook para upgrades de MaxHP
+		local ms = player:FindFirstChild("MatchStats")
+		local attrs = ms and ms:FindFirstChild("Attributes")
+		local maxHP = attrs and attrs:FindFirstChild("MaxHP")
+
+		if maxHP then
+			maxHP.Changed:Connect(function()
+				applyMaxHP(player)
+			end)
+		end
+	end)
+end)
+
+-- =========================
+-- LIFE REGEN LOOP
+-- =========================
+RunService.Heartbeat:Connect(function(dt)
+	if GamePaused.Value then return end
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		local char = player.Character
+		if not char then continue end
+
+		local humanoid = char:FindFirstChildOfClass("Humanoid")
+		if not humanoid or humanoid.Health <= 0 then continue end
+
+		local ms = player:FindFirstChild("MatchStats")
+		if not ms then continue end
+
+		local attrs = ms:FindFirstChild("Attributes")
+		if not attrs then continue end
+
+		local regen = attrs:FindFirstChild("LifeRegen")
+		if not regen or regen.Value <= 0 then continue end
+
+		-- cura por segundo
+		humanoid.Health = math.min(
+			humanoid.MaxHealth,
+			humanoid.Health + regen.Value * dt
+		)
+	end
+end)
+
+print("🎮 GameController FINAL (CollisionGroup + Pause + MaxHP)")

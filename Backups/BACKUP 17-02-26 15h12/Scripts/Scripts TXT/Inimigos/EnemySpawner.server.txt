@@ -1,0 +1,284 @@
+-- EnemySpawner.server
+-- AI + Dano + XP (VERSÃO ESTÁVEL E CONSISTENTE)
+
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local Debris = game:GetService("Debris")
+
+local XPService = require(game.ServerScriptService.XPService)
+local DifficultyService = require(game.ServerScriptService.DifficultyService)
+local DamageService = require(game.ServerScriptService.Combat.DamageService)
+local EnemyTimeController = require(
+	game.ServerScriptService.Combat:WaitForChild("EnemyTimeController")
+)
+local GoldService = require(
+	game.ServerScriptService:WaitForChild("GoldService")
+)
+local ArtifactRegistry = require(
+	game.ServerScriptService.Artifacts.ArtifactRegistry)
+
+local function tryDropArtifact(position, chance)
+	if math.random() > chance then
+		return
+	end
+
+	local artifacts = ArtifactRegistry:GetAll()
+	if not artifacts then return end
+
+	-- coleta IDs REAIS (strings)
+	local ids = {}
+
+	for key, value in pairs(artifacts) do
+		if typeof(key) == "string" then
+			table.insert(ids, key)
+		elseif typeof(value) == "table" and typeof(value.Id) == "string" then
+			table.insert(ids, value.Id)
+		end
+	end
+
+	if #ids == 0 then
+		warn("❌ Nenhum artefato válido no Registry")
+		return
+	end
+
+	local artifactId = ids[math.random(1, #ids)]
+
+	-- pasta no workspace
+	local artifactsFolder = workspace:FindFirstChild("Artifacts")
+	if not artifactsFolder then
+		artifactsFolder = Instance.new("Folder")
+		artifactsFolder.Name = "Artifacts"
+		artifactsFolder.Parent = workspace
+	end
+
+	local ArtifactDropService = require(
+		game.ServerScriptService.Artifacts.ArtifactDropService
+	)
+
+	ArtifactDropService:Spawn(artifactId, position)
+
+	print("🧿 Artefato dropado:", artifactId)
+end
+
+local GameState = ReplicatedStorage:WaitForChild("GameState")
+local GamePaused = GameState:WaitForChild("GamePaused")
+
+_G.Enemies = _G.Enemies or {}
+
+-- =========================
+-- CONFIG
+-- =========================
+local BASE_SPAWN_RATE = 1.2
+local BASE_MAX_ENEMIES = 20
+local BASE_XP_PER_KILL = 12
+
+local ATTACK_RANGE = 6
+local ATTACK_COOLDOWN = 1.2
+
+local SPAWN_DISTANCE_MIN = 50
+local SPAWN_DISTANCE_MAX = 90
+
+-- =========================
+-- FOLDER
+-- =========================
+local enemiesFolder = workspace:FindFirstChild("Enemies")
+if not enemiesFolder then
+	enemiesFolder = Instance.new("Folder")
+	enemiesFolder.Name = "Enemies"
+	enemiesFolder.Parent = workspace
+end
+
+local lastSpawn = 0
+
+-- =========================
+-- UTIL
+-- =========================
+local function getPlayerCenter()
+	for _, player in ipairs(Players:GetPlayers()) do
+		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+		if root then
+			return root.Position
+		end
+	end
+	return Vector3.new(0, 5, 0)
+end
+
+local function getRandomSpawnPos()
+	local center = getPlayerCenter()
+	local angle = math.random() * math.pi * 2
+	local dist = math.random(SPAWN_DISTANCE_MIN, SPAWN_DISTANCE_MAX)
+	return center + Vector3.new(
+		math.cos(angle) * dist,
+		3,
+		math.sin(angle) * dist
+	)
+end
+
+-- =========================
+-- IA DO INIMIGO
+-- =========================
+local function startEnemyAI(enemyData, speed)
+	local humanoid = enemyData.Humanoid
+	local root = enemyData.Root
+	local lastAttack = 0
+
+	enemyData.AIConn = RunService.Heartbeat:Connect(function(dt)
+
+		if GamePaused.Value or EnemyTimeController:IsFrozen() then
+			humanoid.WalkSpeed = 0
+			humanoid:MoveTo(root.Position)
+			return
+		end
+
+		local closestPlayer
+		local closestRoot
+		local minDist = math.huge
+
+		for _, player in ipairs(Players:GetPlayers()) do
+			local pr = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+			if pr then
+				local d = (pr.Position - root.Position).Magnitude
+				if d < minDist then
+					minDist = d
+					closestPlayer = player
+					closestRoot = pr
+				end
+			end
+		end
+
+		if closestRoot then
+			local slow = EnemyTimeController:GetSlow()
+			humanoid.WalkSpeed = speed * slow
+			humanoid:MoveTo(closestRoot.Position)
+
+			lastAttack += dt
+			if minDist <= ATTACK_RANGE and lastAttack >= ATTACK_COOLDOWN then
+				local diff = DifficultyService:GetStats() or {}
+				local damageMultiplier = diff.DamageMultiplier
+				if typeof(damageMultiplier) ~= "number" then
+					damageMultiplier = 1
+				end
+
+				DamageService:TryDamagePlayer(
+					root, -- Root do INIMIGO
+					10 * damageMultiplier,
+					6
+				)
+
+				lastAttack = 0
+			end
+		end
+	end)
+end
+
+-- =========================
+-- SPAWN
+-- =========================
+local function spawnEnemy()
+	if not _G.GameStarted or GamePaused.Value then return end
+
+	local diff = DifficultyService:GetStats()
+	local maxEnemies = math.floor(BASE_MAX_ENEMIES * diff.SpawnMultiplier)
+	if #_G.Enemies >= maxEnemies then return end
+
+	local enemy = ReplicatedStorage.Enemies.BasicEnemy:Clone()
+	local humanoid = enemy:FindFirstChildOfClass("Humanoid")
+	local root = enemy:FindFirstChild("HumanoidRootPart")
+	if not humanoid or not root then
+		enemy:Destroy()
+		return
+	end
+
+	local speed = 6 * diff.SpeedMultiplier
+	humanoid.MaxHealth = math.floor(8 * diff.HealthMultiplier)
+	humanoid.Health = humanoid.MaxHealth
+	humanoid.WalkSpeed = speed
+
+	root.CFrame = CFrame.new(getRandomSpawnPos())
+	enemy.Parent = enemiesFolder
+
+	local enemyData = {
+		Alive = true,
+		Root = root,
+		Humanoid = humanoid,
+		Model = enemy
+	}
+
+	table.insert(_G.Enemies, enemyData)
+	startEnemyAI(enemyData, speed)
+
+	-- =========================
+	-- MORTE + XP + LEVEL UP
+	-- =========================
+	humanoid.Died:Connect(function()
+		enemyData.Alive = false
+		if enemyData.AIConn then enemyData.AIConn:Disconnect() end
+
+		for i, e in ipairs(_G.Enemies) do
+			if e == enemyData then
+				table.remove(_G.Enemies, i)
+				break
+			end
+		end
+
+		local closestPlayer
+		local minDist = math.huge
+
+		for _, p in ipairs(Players:GetPlayers()) do
+			local pr = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+			if pr then
+				local d = (pr.Position - root.Position).Magnitude
+				if d < minDist then
+					minDist = d
+					closestPlayer = p
+				end
+			end
+		end
+
+		if closestPlayer then
+			local ms = closestPlayer:FindFirstChild("MatchStats")
+			if ms then
+				local xp = ms.XP
+				local level = ms.Level
+				local xpToNext = ms.XPToNext
+
+				local gain = XPService:GetXPReward(
+					BASE_XP_PER_KILL,
+					diff.HealthMultiplier,
+					level.Value
+				)
+
+				xp.Value += gain
+
+				while xp.Value >= xpToNext.Value do
+					xp.Value -= xpToNext.Value
+					level.Value += 1
+					xpToNext.Value = XPService:GetXPRequired(level.Value)
+				end
+			end
+			GoldService:GiveRunGold(closestPlayer, 1, "Enemy")
+		end
+		-- 🧿 DROP DE ARTEFATO (INIMIGO COMUM)
+		tryDropArtifact(root.Position, 0.10) -- 20% de chance)
+
+		Debris:AddItem(enemy, 2)
+	end)
+end
+
+-- =========================
+-- LOOP
+-- =========================
+RunService.Heartbeat:Connect(function(dt)
+	if not _G.GameStarted or GamePaused.Value then return end
+
+	lastSpawn += dt
+	local diff = DifficultyService:GetStats()
+
+	if lastSpawn >= BASE_SPAWN_RATE / diff.SpawnMultiplier then
+		spawnEnemy()
+		lastSpawn = 0
+	end
+end)
+
+print("👹 EnemySpawner ESTÁVEL (AI + Dano + XP + LevelUp)")

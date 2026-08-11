@@ -1,0 +1,30 @@
+-- ArtifactRegistry.lua
+
+local EffectsFolder = script.Parent:WaitForChild("ArtifactsEffects")
+
+local ArtifactRegistry = {}
+
+ArtifactRegistry.Definitions = {
+	["Ignis"] = require(EffectsFolder:WaitForChild("Ignis")),
+	["Aurum"] = require(EffectsFolder:WaitForChild("Aurum")),
+	["TempusStans"] = require(EffectsFolder:WaitForChild("TempusStans")),
+	["Sanguis"] = require(EffectsFolder:WaitForChild("Sanguis")),
+	["Congelo"] = require(EffectsFolder:WaitForChild("Congelo")),
+	["FluxusEletricus"] = require(EffectsFolder:WaitForChild("FluxusEletricus")),
+	["Fragor"] = require(EffectsFolder:WaitForChild("Fragor")),
+	["Gargantua"] = require(EffectsFolder:WaitForChild("Gargantua")),
+}
+
+function ArtifactRegistry:Get(id)
+	return self.Definitions[id]
+end
+
+function ArtifactRegistry:GetAll()
+	local list = {}
+	for _, def in pairs(self.Definitions) do
+		table.insert(list, def)
+	end
+	return list
+end
+
+return ArtifactRegistry

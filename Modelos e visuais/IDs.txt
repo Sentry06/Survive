@@ -1,0 +1,58 @@
+Artefatos
+
+Aurum: rbxassetid://80249759309977
+Congelo: rbxassetid://134244647812302	
+FluxusEletricus: rbxassetid://104580272677158
+Fargor: rbxassetid://117803528100164
+Gargantua: rbxassetid://114063822471365
+Ignis: rbxassetid://131890005138440
+Nebula: rbxassetid://130406486482594
+Sanguis: rbxassetid://128312303589197
+TempusStans: rbxassetid://94268961835674
+
+Armas
+
+Knife:rbxassetid://74628167448561
+BolaFutebol:rbxassetid://100241031910897
+Chinelo:rbxassetid://96137138854827
+
+Sinergias
+
+AegisPerpetua:rbxassetid://120780219447290
+ApexPredator:rbxassetid://75343799119861
+AstrumPenetratio:rbxassetid://72370251149507
+Cataclysmus:rbxassetid://94437819645815
+CeleritasDivina:rbxassetid://122567577156539
+ChaosFortuna:rbxassetid://122280237655941
+CosmosAbsolutum:rbxassetid://117699671545548
+DeusExMachina:rbxassetid://107824477052710
+Eternitas:rbxassetid://122610702111966
+FortunaMajor:rbxassetid://139435688193283
+Hypernova:rbxassetid://91743565909880
+IgniferAeternum:rbxassetid://91162558778149
+Immortalis:rbxassetid://93132827162502
+MagnusOrbis:rbxassetid://104011568230413
+MareVastum:rbxassetid://121249455201424
+Singularitas:rbxassetid://119126001389903
+Tempestas:rbxassetid://137043402336734
+TempusDominus:rbxassetid://138047786154989
+UmbraVitalis:rbxassetid://111257649502134
+VelocitasAstra:rbxassetid://83538128972591
+
+Cartas
+The Aegis: rbxassetid://127625421113266
+The Cataclysm: rbxassetid://114555678189334
+The Chronomancer: rbxassetid://101554669436159
+The Colossus: rbxassetid://111299426734557
+The Comet: rbxassetid://124758532025107
+The Executioner: rbxassetid://123913026761980
+The Horizon: rbxassetid://98638212001569
+The Impaler: rbxassetid://136817251002721
+The Legion: rbxassetid://101335309844974
+The Renewal: rbxassetid://92852108871181
+The Titan's Heart: rbxassetid://130486319106063
+The Verdant Pact: rbxassetid://126728360783765
+The Wheel Of Fortune: rbxassetid://127986783551877
+The Windrunner: rbxassetid://89765322108085
+
+

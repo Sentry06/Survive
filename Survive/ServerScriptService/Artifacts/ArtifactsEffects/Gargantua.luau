@@ -1,0 +1,110 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Gargantua = {}
+
+Gargantua.Id = "Gargantua"
+Gargantua.Duration = 10
+
+Gargantua.Tags = { "BlackHole" }
+
+Gargantua.Data = {
+	Radius = 70,
+	PullForce = 150,
+	KillDistance = 5
+}
+
+-------------------------------------------------
+-- ATIVAR
+-------------------------------------------------
+function Gargantua:OnApply(player, pickupModel)
+
+	-- 🔎 Buscar modelo com segurança
+	local modelsFolder = ReplicatedStorage:FindFirstChild("ArtifactsModels")
+	if not modelsFolder then
+		warn("❌ ArtifactModels não encontrado no ReplicatedStorage")
+		return
+	end
+
+	local template = modelsFolder:FindFirstChild("Gargantua")
+	if not template then
+		warn("❌ Modelo Gargantua não encontrado em ArtifactModels")
+		return
+	end
+
+	if not pickupModel then
+		warn("❌ pickupModel não recebido")
+		return
+	end
+
+	-- 🌀 Clonar modelo
+	local blackHole = template:Clone()
+	blackHole.Parent = workspace
+
+	-- Spawn exatamente onde foi coletado
+	blackHole:PivotTo(pickupModel:GetPivot())
+
+	if not blackHole.PrimaryPart then
+		warn("❌ Gargantua precisa de PrimaryPart")
+		return
+	end
+
+	local center = blackHole.PrimaryPart
+	local radius = self.Data.Radius
+	local pullForce = self.Data.PullForce
+	local killDistance = self.Data.KillDistance
+
+	local startTime = os.clock()
+
+	local connection
+	connection = RunService.Heartbeat:Connect(function(dt)
+
+		-- terminou duração
+		if os.clock() - startTime >= self.Duration then
+			connection:Disconnect()
+			blackHole:Destroy()
+			print("🌀 Gargantua finalizado")
+			return
+		end
+
+		for _, enemy in ipairs(_G.Enemies or {}) do
+			if enemy
+				and enemy.Alive
+				and enemy.Root
+				and enemy.Humanoid
+				and enemy.Humanoid.Health > 0 then
+
+				local direction = center.Position - enemy.Root.Position
+				local distance = direction.Magnitude
+
+				if distance <= radius then
+
+					enemy.Model:SetAttribute("BlackHolePull", true)
+
+					local pullDir = direction.Unit
+					local strength = pullForce * (1 - (distance / radius))
+
+					enemy.Root.AssemblyLinearVelocity =
+						pullDir * strength
+
+					if distance <= killDistance then
+						enemy.Humanoid.Health = 0
+					end
+				else
+					enemy.Model:SetAttribute("BlackHolePull", nil)
+				end
+			end
+		end
+	end)
+
+	print("🌀 Gargantua ativado!")
+end
+
+-------------------------------------------------
+-- REMOVER
+-------------------------------------------------
+function Gargantua:OnRemove(player)
+	print("🌀 Gargantua removido")
+end
+
+return Gargantua

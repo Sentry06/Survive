@@ -1,0 +1,119 @@
+-- ArtifactService.lua
+-- Gerencia estado e duração dos artefatos da RUN
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local ArtifactRegistry = require(script.Parent:WaitForChild("ArtifactRegistry"))
+
+local ArtifactService = {}
+
+
+-- estado por jogador
+-- player -> { Id, EndsAt, Data }
+local activeArtifacts = {}
+
+-- =========================
+-- ATIVAR ARTEFATO
+-- =========================
+function ArtifactService:Apply(player, artifactId, pickupModel)
+
+	-- normaliza o id
+	artifactId = tostring(artifactId)
+
+	local def = ArtifactRegistry:Get(artifactId)
+	if not def then
+		warn("❌ Artefato inválido:", artifactId)
+		return
+	end
+
+	-- remove artefato atual
+	self:Remove(player)
+
+	activeArtifacts[player] = {
+		Id = def.Id,
+		Data = def.Data,
+		EndsAt = def.Duration and (os.clock() + def.Duration) or nil
+	}
+
+	player:SetAttribute("ActiveArtifact", def.Id)
+	if def.OnApply then
+		def:OnApply(player, pickupModel)
+	end
+
+	print("[Artifact] Ativado:", def.Id, "→", player.Name)
+end
+
+-- =========================
+-- REMOVER
+function ArtifactService:Remove(player)
+	local current = activeArtifacts[player]
+	if not current then return end
+
+	local def = ArtifactRegistry:Get(current.Id)
+
+	if def and def.OnRemove then
+		def:OnRemove(player)
+	end
+
+	activeArtifacts[player] = nil
+	player:SetAttribute("ActiveArtifact", nil)
+
+	print("[Artifact] Removido de", player.Name)
+end
+
+-- =========================
+-- CONSULTAS
+-- =========================
+function ArtifactService:Get(player)
+	return activeArtifacts[player]
+end
+
+function ArtifactService:HasTag(player, tag)
+	local art = activeArtifacts[player]
+	if not art then return false end
+
+	local def = ArtifactRegistry:Get(art.Id)
+	if not def or not def.Tags then return false end
+
+	for _, t in ipairs(def.Tags) do
+		if t == tag then
+			return true
+		end
+	end
+
+	return false
+end
+
+function ArtifactService:GetData(player)
+	local art = activeArtifacts[player]
+	return art and art.Data
+end
+
+-- =========================
+-- LOOP DE DURAÇÃO
+-- =========================
+RunService.Heartbeat:Connect(function()
+	local now = os.clock()
+
+	for player, art in pairs(activeArtifacts) do
+		if art.EndsAt and now >= art.EndsAt then
+			ArtifactService:Remove(player)
+		end
+	end
+end)
+
+-- =========================
+-- LIMPEZA
+-- =========================
+Players.PlayerRemoving:Connect(function(player)
+	activeArtifacts[player] = nil
+end)
+
+print("Registry contém:")
+for k in pairs(ArtifactRegistry.Definitions) do
+	print(" -", k)
+end
+
+
+return ArtifactService

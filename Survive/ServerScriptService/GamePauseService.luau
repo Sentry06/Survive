@@ -1,0 +1,27 @@
+local GamePauseService = {}
+
+local pauseLocks = {}
+
+local gamePausedValue = game.ReplicatedStorage.GameState:WaitForChild("GamePaused")
+
+
+local function updateState()
+	local paused = next(pauseLocks) ~= nil
+	gamePausedValue.Value = paused
+end
+
+function GamePauseService:AddPause(lockId)
+	pauseLocks[lockId] = true
+	updateState()
+end
+
+function GamePauseService:RemovePause(lockId)
+	pauseLocks[lockId] = nil
+	updateState()
+end
+
+function GamePauseService:IsPaused()
+	return gamePausedValue.Value
+end
+
+return GamePauseService

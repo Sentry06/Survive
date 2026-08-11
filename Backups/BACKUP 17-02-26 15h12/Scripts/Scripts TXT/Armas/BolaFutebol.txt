@@ -1,0 +1,180 @@
+-- BolaFutebol.lua
+-- Versão Arcade Simples (3 projéteis fixos, sem ricochete)
+
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Debris = game:GetService("Debris")
+
+local WeaponBase = require(script.Parent:WaitForChild("WeaponBase"))
+local EnemyDamageService = require(
+	game.ServerScriptService.Combat.EnemyDamageService
+)
+
+
+local BolaFutebol = {}
+BolaFutebol.__index = BolaFutebol
+setmetatable(BolaFutebol, { __index = WeaponBase })
+
+local ProjectileTemplate =
+	ReplicatedStorage
+	:WaitForChild("Weapons")
+	:WaitForChild("BolaFutebol")
+	:WaitForChild("BolaProjectile")
+
+--------------------------------------------------
+-- CONFIG FIXA
+--------------------------------------------------
+
+local BASE_PROJECTILE_COUNT = 3
+local PROJECTILE_LIFETIME = 3 -- segundos
+
+--------------------------------------------------
+-- CONSTRUTOR
+--------------------------------------------------
+function BolaFutebol.new(player, limiter)
+
+	local self = WeaponBase.new({
+		Name = "BolaFutebol",
+		Damage = 22,
+		Range = 40,
+		Cooldown = 2.4,
+		ProjectileSpeed = 55
+	}, player, limiter)
+
+	self.Level = 1
+
+	self.Scaling = {
+		Damage = 1.10,
+	}
+
+	setmetatable(self, BolaFutebol)
+	return self
+end
+
+--------------------------------------------------
+-- EVOLUÇÃO
+--------------------------------------------------
+function BolaFutebol:OnUpgrade(level)
+
+	self.Level = level
+	self.BaseStats.Damage *= self.Scaling.Damage
+
+	print("⚽ BolaFutebol nível:", level)
+end
+
+--------------------------------------------------
+-- SPAWN SIMPLES
+--------------------------------------------------
+local function spawnBall(self, origin, direction, speed, damage, attrs)
+
+	local model = ProjectileTemplate:Clone()
+	model.Parent = workspace
+
+	if model:IsA("Model") then
+		model.PrimaryPart = model:FindFirstChildWhichIsA("BasePart")
+	end
+
+	local part = model:IsA("Model") and model.PrimaryPart or model
+	if not part then
+		model:Destroy()
+		return
+	end
+
+	part.Anchored = true
+	part.CanCollide = false
+	part.CFrame = CFrame.new(origin)
+
+	local lifetime = 0
+	local alive = true
+
+	self:OnProjectileSpawn()
+
+	local conn
+	conn = RunService.Heartbeat:Connect(function(dt)
+
+		if not alive then return end
+		if not part or not part.Parent then
+			conn:Disconnect()
+			return
+		end
+
+		-- Movimento reto
+		part.CFrame += direction * speed * dt
+
+		lifetime += dt
+
+		-- Verificar colisão simples com inimigos
+		for _, enemy in ipairs(_G.Enemies or {}) do
+			if enemy.Alive and enemy.Root and enemy.Humanoid then
+				local dist =
+					(enemy.Root.Position - part.Position).Magnitude
+
+				if dist <= 3 * (attrs.AttackSize or 1) then
+					local finalDamage =
+						self:ComputeFinalDamage(self.BaseStats.Damage, attrs)
+
+					EnemyDamageService:DamageEnemy(self.Player, enemy.Humanoid, finalDamage)
+					break
+				end
+			end
+		end
+
+		-- Destruir após tempo
+		if lifetime >= PROJECTILE_LIFETIME then
+			alive = false
+			conn:Disconnect()
+			model:Destroy()
+			self:OnProjectileDestroy()
+		end
+	end)
+
+	Debris:AddItem(model, PROJECTILE_LIFETIME + 1)
+end
+
+--------------------------------------------------
+-- ATAQUE
+--------------------------------------------------
+function BolaFutebol:Attack(root, attrs)
+
+	local enemies = self:GetEnemiesInRange(100)
+	if #enemies == 0 then return end
+
+	self:StartCooldown(attrs)
+
+	local projectileCount =
+		BASE_PROJECTILE_COUNT + math.floor((attrs.MultiAttack or 1) - 1)
+
+	for i = 1, projectileCount do
+
+		if not self:CanSpawnProjectile() then break end
+
+		local enemy =
+			enemies[((i - 1) % #enemies) + 1]
+
+		if enemy and enemy.Root then
+
+			local dir =
+				(enemy.Root.Position - root.Position).Unit
+
+			local origin =
+				root.Position
+				+ dir * 2
+				+ Vector3.new(0, 1.5, 0)
+
+			local speed =
+				self.BaseStats.ProjectileSpeed
+				* (attrs.ProjectileSpeed or 1)
+
+			spawnBall(
+				self,
+				origin,
+				dir,
+				speed,
+				self.BaseStats.Damage,
+				attrs
+			)
+		end
+	end
+end
+
+return BolaFutebol

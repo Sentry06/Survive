@@ -1,0 +1,59 @@
+-- GlobalStats.server
+-- Stats permanentes do jogador (META / fora da run)
+
+local Players = game:GetService("Players")
+
+local function createNumber(parent, name, value)
+	local v = Instance.new("NumberValue")
+	v.Name = name
+	v.Value = value
+	v.Parent = parent
+	return v
+end
+
+local function createInt(parent, name, value)
+	local v = Instance.new("IntValue")
+	v.Name = name
+	v.Value = value
+	v.Parent = parent
+	return v
+end
+
+Players.PlayerAdded:Connect(function(player)
+	local global = Instance.new("Folder")
+	global.Name = "GlobalStats"
+	global.Parent = player
+
+	-- ======================
+	-- 🪙 ECONOMIA
+	-- ======================
+	createInt(global, "Gold", 0)
+
+	-- ======================
+	-- 🔥 COMBATE (MULTIPLICADORES)
+	-- ======================
+	createNumber(global, "Damage", 1)
+	createNumber(global, "Cooldown", 1)
+	createNumber(global, "Range", 1)
+	createNumber(global, "ProjectileSpeed", 1)
+	createNumber(global, "AttackSize", 1)
+
+	-- ======================
+	-- 🏃 MOBILIDADE / VIDA
+	-- ======================
+	createNumber(global, "MovementSpeed", 1)
+	createNumber(global, "MaxHP", 1)
+	createNumber(global, "LifeRegen", 1)
+	createNumber(global, "Shield", 1)
+
+	-- ======================
+	-- 🎯 AVANÇADOS
+	-- ======================
+	createInt(global, "MultiAttack", 1)
+	createNumber(global, "Luck", 0)
+	
+	createNumber(global, "Gold", 0)
+	createNumber(global, "GoldMultiplier", 1)
+
+	print("🌍 GlobalStats criados para", player.Name)
+end)

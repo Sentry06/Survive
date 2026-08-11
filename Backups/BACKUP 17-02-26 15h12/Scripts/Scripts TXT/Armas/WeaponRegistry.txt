@@ -1,0 +1,32 @@
+local WeaponRegistry = {}
+
+WeaponRegistry.Definitions = {
+	Knife = {
+		Id = "Knife",
+		Image = "http://www.roblox.com/asset/?id=121944778"
+	},
+	BolaFutebol = { -- 🔥 corrigido aqui
+		Id = "BolaFutebol", -- 🔥 e aqui
+		Image = "rbxassetid://1042484771"
+	},
+	Chinelo = {
+		Id = "Chinelo",
+		Image = "rbxassetid://118989714267193"
+	}
+}
+
+function WeaponRegistry:GetRandomWeaponId(player)
+	local list = {}
+
+	for id, _ in pairs(self.Definitions) do
+		table.insert(list, id)
+	end
+
+	return list[math.random(1, #list)]
+end
+
+function WeaponRegistry:GetAll()
+	return self.Definitions
+end
+
+return WeaponRegistry

@@ -1,0 +1,149 @@
+local Players = game:GetService("Players")
+
+local ChestRegistry = require(script.Parent:WaitForChild("ChestRegistry"))
+local GoldService = require(game.ServerScriptService:WaitForChild("GoldService"))
+local RewardGenerator = require(script.Parent:WaitForChild("RewardGenerator"))
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CollectEvent = ReplicatedStorage.Remotes:WaitForChild("ChestCollect")
+local RewardEvent = ReplicatedStorage.Remotes:WaitForChild("ChestReward")
+local GamePauseService = require(
+	game.ServerScriptService:WaitForChild("GamePauseService")
+)
+
+
+local ChestService = {}
+
+-- =========================
+-- TABELAS DE TIPO DE ATRIBUTO
+-- =========================
+
+local NORMAL_MULT = {
+	Damage = true,
+	Range = true,
+	AttackSize = true,
+	ProjectileSpeed = true,
+	MovementSpeed = true,
+	MaxHP = true,
+}
+
+local INVERTED_MULT = {
+	Cooldown = true,
+	ShieldRegenDelay = true,
+}
+
+local ADDITIVE = {
+	MultiAttack = true,
+	ProjectilePierce = true,
+	Luck = true,
+	LifeRegen = true,
+	Shield = true,
+	AreaDamage = true,
+}
+
+-- =========================
+-- APPLY ATTRIBUTE
+-- =========================
+
+local function ApplyAttribute(stat, attrName, multiplier, value)
+
+	-- Multiplicador normal (maior é melhor)
+	if NORMAL_MULT[attrName] and multiplier then
+		stat.Value *= multiplier
+		return
+	end
+
+	-- Multiplicador invertido (menor é melhor)
+	if INVERTED_MULT[attrName] and multiplier then
+		stat.Value *= (2 - multiplier)
+		return
+	end
+
+	-- Aditivo
+	if ADDITIVE[attrName] and value then
+		stat.Value += value
+		return
+	end
+
+	warn("⚠️ Tipo de atributo não tratado:", attrName)
+end
+
+-- =========================
+-- ABRIR CHEST
+-- =========================
+
+function ChestService:OpenChest(player, chest)
+
+	GamePauseService:AddPause("Chest")
+
+	if not chest then return end
+
+	local rarity = chest:GetAttribute("Rarity")
+	if not rarity then
+		warn("Chest sem raridade")
+		return
+	end
+
+	local chestDef = ChestRegistry:Get(rarity)
+	if not chestDef then
+		warn("Raridade inválida:", rarity)
+		return
+	end
+
+	local rewards = RewardGenerator:Generate(player, rarity, chestDef)
+
+	RewardEvent:FireClient(player, rewards, rarity)
+
+	chest:Destroy()
+end
+
+-- =========================
+-- COLETAR RECOMPENSA
+-- =========================
+
+CollectEvent.OnServerEvent:Connect(function(player, rewards)
+
+	if not rewards then return end
+
+	-- 🪙 GOLD
+	GoldService:GiveRunGold(player, rewards.Gold, "Chest")
+
+	-- 📈 ATTRIBUTES
+	local matchStats = player:FindFirstChild("MatchStats")
+	if matchStats then
+		local attrs = matchStats:FindFirstChild("Attributes")
+
+		if attrs then
+			for _, attr in ipairs(rewards.Attributes) do
+
+				local stat = attrs:FindFirstChild(attr.Name)
+
+				if not stat then
+					warn("⚠️ Atributo não encontrado no player:", attr.Name)
+					continue
+				end
+
+				ApplyAttribute(stat, attr.Name, attr.Multiplier, attr.Value)
+
+				-- Caso especial: Shield precisa atualizar CurrentShield
+				if attr.Name == "Shield" then
+					local currentShield = attrs:FindFirstChild("CurrentShield")
+					if currentShield then
+						currentShield.Value = stat.Value
+					end
+				end
+			end
+		end
+	end
+
+	-- ⚔ WEAPON
+	if rewards.Weapon and _G.WeaponController then
+		_G.WeaponController:GiveWeapon(player, rewards.Weapon, rarity)
+	end
+
+	print("🎁 Rewards applied to", player.Name)
+
+	GamePauseService:RemovePause("Chest")
+end)
+
+return ChestService

@@ -1,0 +1,169 @@
+-- LevelUp.client.lua
+-- UI de Level Up (ATRIBUTOS com RARIDADE)
+-- VERSÃO DEFINITIVA – estável, sem spam, sem soft-lock
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local PickUpgrade = Remotes:WaitForChild("PickUpgrade")
+local LevelUpGuiRemote = Remotes:WaitForChild("LevelUpGui")
+
+-- =====================
+-- UI REFERENCES
+-- =====================
+local gui = player:WaitForChild("PlayerGui"):WaitForChild("LevelUpGui")
+gui.Enabled = false
+
+local frame = gui:WaitForChild("UpgradeFrame")
+
+local optionButtons = {
+	frame:WaitForChild("Upgrade 1"),
+	frame:WaitForChild("Upgrade 2"),
+	frame:WaitForChild("Upgrade 3"),
+}
+
+local rerollButton = frame:WaitForChild("Reroll")
+local banishButton = frame:WaitForChild("Banish")
+
+-- =====================
+-- STATE
+-- =====================
+local currentOptions = {}
+local selectedIndex = nil
+
+-- =====================
+-- HELPERS
+-- =====================
+local function clearSelection()
+	selectedIndex = nil
+	for _, btn in ipairs(optionButtons) do
+		btn.BackgroundTransparency = 0.4
+	end
+end
+
+local function selectOption(index)
+	selectedIndex = index
+	for i, btn in ipairs(optionButtons) do
+		btn.BackgroundTransparency = (i == index) and 0 or 0.4
+	end
+end
+
+local function closeGui()
+	gui.Enabled = false
+	currentOptions = {}
+	selectedIndex = nil
+end
+
+local function updateSideButtons()
+	-- Sempre visíveis
+	rerollButton.Visible = true
+	banishButton.Visible = true
+
+	rerollButton.Text = "REROLL"
+	banishButton.Text = "BANISH"
+end
+
+-- =====================
+-- RENDER OPTIONS
+-- =====================
+local function showOptions(options)
+	if not options or #options == 0 then
+		warn("⚠️ LevelUp recebeu opções vazias")
+		return
+	end
+
+	currentOptions = options
+	gui.Enabled = true
+	clearSelection()
+	updateSideButtons()
+
+	for i, btn in ipairs(optionButtons) do
+		local opt = options[i]
+		if opt then
+			btn.Visible = true
+			btn.Text = string.format(
+				"⬆️ %s (%s)",
+				opt.Id,
+				opt.Rarity or "Bronze"
+			)
+		else
+			btn.Visible = false
+		end
+	end
+end
+
+-- =====================
+-- OPTION BUTTONS
+-- =====================
+for i, btn in ipairs(optionButtons) do
+	btn.MouseButton1Click:Connect(function()
+		if selectedIndex ~= i then
+			selectOption(i)
+			return
+		end
+
+		local opt = currentOptions[i]
+		if not opt then return end
+
+		PickUpgrade:FireServer({
+			Action = "PICK",
+			Type = "Attribute",
+			Id = opt.Id,
+			Rarity = opt.Rarity,
+			Value = opt.Value,
+		})
+
+		closeGui()
+	end)
+end
+
+-- =====================
+-- REROLL
+-- =====================
+rerollButton.MouseButton1Click:Connect(function()
+	PickUpgrade:FireServer({
+		Action = "REROLL",
+	})
+end)
+
+-- =====================
+-- BANISH
+-- =====================
+banishButton.MouseButton1Click:Connect(function()
+	if not selectedIndex then return end
+	local opt = currentOptions[selectedIndex]
+	if not opt then return end
+
+	PickUpgrade:FireServer({
+		Action = "BANISH",
+		UpgradeId = opt.Id,
+	})
+end)
+
+-- =====================
+-- REMOTE EVENT
+-- =====================
+LevelUpGuiRemote.OnClientEvent:Connect(showOptions)
+local LevelUpClosed = Remotes:WaitForChild("LevelUpClosed")
+
+LevelUpGuiRemote.OnClientEvent:Connect(function(options)
+	if not options then
+		gui.Enabled = false
+		PickUpgrade:FireServer({ Action = "CLOSE" })
+		return
+	end
+
+	showOptions(options)
+end)
+
+LevelUpClosed.OnClientEvent:Connect(function()
+	gui.Enabled = false
+	currentOptions = {}
+	selectedIndex = nil
+end)
+
+
+print("🎮 LevelUp.client ESTÁVEL carregado")

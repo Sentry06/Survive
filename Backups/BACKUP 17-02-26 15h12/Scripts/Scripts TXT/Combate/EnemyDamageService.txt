@@ -1,0 +1,256 @@
+local ArtifactService = require(
+	game.ServerScriptService.Artifacts.ArtifactService
+)
+
+local EnemyStatusService = require(
+	game.ServerScriptService.Combat.EnemyStatusService
+)
+
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
+
+local EnemyDamageService = {}
+
+-------------------------------------------------
+-- 🔥 VISUAL DE AREA DAMAGE
+-------------------------------------------------
+local function spawnAreaVisual(position, radius)
+
+	if not position then return end
+
+	local circle = Instance.new("Part")
+	circle.Shape = Enum.PartType.Cylinder
+	circle.Anchored = true
+	circle.CanCollide = false
+	circle.Material = Enum.Material.Neon
+	circle.Color = Color3.fromRGB(255, 255, 255)
+	circle.Transparency = 0.65
+
+	-- começa menor
+	circle.Size = Vector3.new(0.2, radius * 0.3, radius * 0.3)
+	circle.CFrame =
+		CFrame.new(position)
+		* CFrame.Angles(0, 0, math.rad(90))
+
+	circle.Parent = workspace
+
+	local tween = TweenService:Create(
+		circle,
+		TweenInfo.new(
+			0.45,
+			Enum.EasingStyle.Quad,
+			Enum.EasingDirection.Out
+		),
+		{
+			Size = Vector3.new(0.2, radius * 1.6, radius * 1.6),
+			Transparency = 1
+		}
+	)
+
+	tween:Play()
+	Debris:AddItem(circle, 0.5)
+end
+
+-------------------------------------------------
+-- 💥 VISUAL DO FRAGOR (EXPLOSÃO)
+-------------------------------------------------
+local function spawnExplosionVisual(position, radius)
+
+	if not position then return end
+
+	local part = Instance.new("Part")
+	part.Shape = Enum.PartType.Ball
+	part.Anchored = true
+	part.CanCollide = false
+	part.Material = Enum.Material.Neon
+	part.Color = Color3.fromRGB(255, 120, 0)
+	part.Transparency = 0.4
+
+	part.Size = Vector3.new(1,1,1)
+	part.CFrame = CFrame.new(position)
+	part.Parent = workspace
+
+	local tween = TweenService:Create(
+		part,
+		TweenInfo.new(
+			0.35,
+			Enum.EasingStyle.Quad,
+			Enum.EasingDirection.Out
+		),
+		{
+			Size = Vector3.new(radius*2, radius*2, radius*2),
+			Transparency = 1
+		}
+	)
+
+	tween:Play()
+	Debris:AddItem(part, 0.4)
+end
+
+-------------------------------------------------
+-- 💥 DAMAGE
+-------------------------------------------------
+function EnemyDamageService:DamageEnemy(player, humanoid, damage, isSplash)
+
+	if not humanoid or humanoid.Health <= 0 then
+		return
+	end
+
+	-- aplica dano principal
+	humanoid:TakeDamage(damage)
+
+	-------------------------------------------------
+	-- 🌋 AREA DAMAGE (INSTANTÂNEO E LIMPO)
+	-------------------------------------------------
+	if not isSplash then
+
+		local attrs = player:GetAttributes()
+		local areaPercent = (attrs and attrs.AreaDamage) or 0
+
+		if areaPercent > 0 then
+
+			local enemyModel = humanoid.Parent
+			if not enemyModel then return end
+
+			local originRoot = enemyModel:FindFirstChild("HumanoidRootPart")
+			if not originRoot then return end
+
+			local BASE_RADIUS = 6
+			local attackSize = attrs.AttackSize or 1
+
+			local radiusMultiplier = 1 + (areaPercent * 1.5)
+			local radius = BASE_RADIUS * attackSize * radiusMultiplier
+
+			-- 🔥 visual
+			spawnAreaVisual(originRoot.Position, radius)
+
+			-- 💣 splash
+			local splashMultiplier = 0.5 + areaPercent
+			local splashDamage = damage * splashMultiplier
+
+			for _, otherEnemy in ipairs(_G.Enemies or {}) do
+				if otherEnemy.Alive
+					and otherEnemy.Humanoid
+					and otherEnemy.Root
+					and otherEnemy.Humanoid ~= humanoid then
+
+					local dist =
+						(otherEnemy.Root.Position - originRoot.Position).Magnitude
+
+					if dist <= radius then
+						otherEnemy.Humanoid:TakeDamage(splashDamage)
+					end
+				end
+			end
+		end
+	end
+
+	-------------------------------------------------
+	-- ❄ FREEZE ON HIT
+	-------------------------------------------------
+	if ArtifactService:HasTag(player, "FreezeOnHit") then
+
+		local data = ArtifactService:GetData(player)
+		local chance = data and data.Chance or 0
+		local freezeTime = data and data.FreezeTime or 0
+
+		if math.random() <= chance then
+			for _, enemy in ipairs(_G.Enemies or {}) do
+				if enemy.Humanoid == humanoid then
+					EnemyStatusService:Freeze(enemy, freezeTime)
+					break
+				end
+			end
+		end
+	end
+
+	-------------------------------------------------
+	-- 💥 FRAGOR (EXPLOSÃO BASEADA EM AREA)
+	-------------------------------------------------
+	if not isSplash and ArtifactService:HasTag(player, "FragorExplosion") then
+
+		local data = ArtifactService:GetData(player)
+		if data and math.random() <= data.Chance then
+
+			local attrs = player:GetAttributes()
+			local areaPercent = (attrs and attrs.AreaDamage) or 0
+			if areaPercent <= 0 then return end
+
+			local attackSize = attrs.AttackSize or 1
+
+			local originRoot = humanoid.Parent:FindFirstChild("HumanoidRootPart")
+			if not originRoot then return end
+
+			local BASE_RADIUS = 6
+
+			local radius =
+				BASE_RADIUS
+				* attackSize
+				* (1 + areaPercent)
+				* data.RadiusBoost
+
+			local explosionDamage =
+				damage
+				* areaPercent
+				* data.DamageBoost
+
+			spawnExplosionVisual(originRoot.Position, radius)
+
+			for _, enemy in ipairs(_G.Enemies or {}) do
+				if enemy.Alive and enemy.Root and enemy.Humanoid then
+
+					local dist =
+						(enemy.Root.Position - originRoot.Position).Magnitude
+
+					if dist <= radius then
+						enemy.Humanoid:TakeDamage(explosionDamage)
+					end
+				end
+			end
+
+			print("💥 FRAGOR EXPLOSÃO!")
+		end
+	end
+
+	-------------------------------------------------
+	-- ⚡ FLUXUS ELETRICUS (CHAIN)
+	-------------------------------------------------
+	if ArtifactService:HasTag(player, "Electric") and not isSplash then
+
+		local data = ArtifactService:GetData(player)
+		local percent = data and data.DamagePercent or 0
+
+		local chainDamage = damage * percent
+
+		for _, enemy in ipairs(_G.Enemies or {}) do
+			if enemy.Humanoid == humanoid then
+				EnemyStatusService:ChainLightning(enemy, player, chainDamage)
+				break
+			end
+		end
+	end
+
+	-------------------------------------------------
+	-- 🩸 LIFE STEAL (SANGUIS)
+	-------------------------------------------------
+	if ArtifactService:HasTag(player, "LifeSteal") then
+
+		local data = ArtifactService:GetData(player)
+		local stealPercent = data and data.Percent or 0
+
+		if stealPercent > 0 then
+
+			local char = player.Character
+			local ph = char and char:FindFirstChildOfClass("Humanoid")
+
+			if ph then
+				ph.Health = math.min(
+					ph.MaxHealth,
+					ph.Health + damage * stealPercent
+				)
+			end
+		end
+	end
+end
+
+return EnemyDamageService

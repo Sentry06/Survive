@@ -1,0 +1,121 @@
+-- CameraController.client
+-- Câmera estilo MegaBonk (mouse livre, sem botão direito, anti-chão)
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- =====================
+-- CONFIGURAÇÕES
+-- =====================
+local CAMERA_DISTANCE = 20
+local CAMERA_HEIGHT = 12
+local LOOK_AT_HEIGHT = 4
+
+local MIN_CAMERA_Y_OFFSET = 5 -- 🔥 impede câmera de entrar no chão
+
+local SENSITIVITY = 0.25
+local ROTATION_SMOOTHNESS = 0.18
+
+local MIN_PITCH = -10
+local MAX_PITCH = 40
+
+-- =====================
+-- ESTADO
+-- =====================
+local yaw = 0
+local pitch = 15
+local targetYaw = 0
+local targetPitch = pitch
+
+local character
+local root
+
+-- Mouse SEMPRE livre
+UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+UserInputService.MouseIconEnabled = true
+
+camera.CameraType = Enum.CameraType.Scriptable
+camera.FieldOfView = 70
+
+-- =====================
+-- PERSONAGEM
+-- =====================
+local function onCharacterAdded(char)
+	character = char
+	root = char:WaitForChild("HumanoidRootPart")
+end
+
+player.CharacterAdded:Connect(onCharacterAdded)
+if player.Character then
+	onCharacterAdded(player.Character)
+end
+
+-- =====================
+-- INPUT DO MOUSE (SEM BOTÃO DIREITO)
+-- =====================
+UserInputService.InputChanged:Connect(function(input)
+	-- ❌ Não gira câmera se UI estiver aberta
+	if _G.UIOpen then return end
+
+	if input.UserInputType == Enum.UserInputType.MouseMovement then
+		targetYaw -= input.Delta.X * SENSITIVITY
+		targetPitch -= input.Delta.Y * SENSITIVITY
+		targetPitch = math.clamp(targetPitch, MIN_PITCH, MAX_PITCH)
+	end
+end)
+
+-- =====================
+-- LOOP DA CÂMERA
+-- =====================
+RunService.RenderStepped:Connect(function()
+	if not root then return end
+
+	-- Se UI estiver aberta → congela a câmera (NÃO recalcula)
+	if _G.UIOpen then
+		camera.CFrame = camera.CFrame
+		return
+	end
+
+	-- Smooth
+	yaw += (targetYaw - yaw) * ROTATION_SMOOTHNESS
+	pitch += (targetPitch - pitch) * ROTATION_SMOOTHNESS
+
+	local rotation =
+		CFrame.Angles(0, math.rad(yaw), 0) *
+		CFrame.Angles(math.rad(pitch), 0, 0)
+
+	local offset = rotation:VectorToWorldSpace(
+		Vector3.new(0, CAMERA_HEIGHT, CAMERA_DISTANCE)
+	)
+
+	local desiredCamPos = root.Position - offset
+
+	-- 🔒 CLAMP DE ALTURA (ANTI-CHÃO)
+	local minY = root.Position.Y + MIN_CAMERA_Y_OFFSET
+	if desiredCamPos.Y < minY then
+		desiredCamPos = Vector3.new(
+			desiredCamPos.X,
+			minY,
+			desiredCamPos.Z
+		)
+	end
+
+	local lookAt = root.Position + Vector3.new(0, LOOK_AT_HEIGHT, 0)
+
+	camera.CFrame = CFrame.new(desiredCamPos, lookAt)
+
+	-- Personagem olha para frente da câmera (somente Y)
+	local lookDir = Vector3.new(
+		math.sin(math.rad(yaw)),
+		0,
+		math.cos(math.rad(yaw))
+	)
+
+	root.CFrame = CFrame.new(root.Position, root.Position + lookDir)
+end)
+
+print("📷 Camera MegaBonk FINAL (sem botão direito, sem cair no chão)")

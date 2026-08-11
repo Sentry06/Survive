@@ -1,0 +1,32 @@
+-- DifficultyService
+local DifficultyService = {}
+
+local BASE_DIFFICULTY = 1
+local DIFFICULTY_PER_MINUTE = 0.25
+
+local currentTime = 0
+
+function DifficultyService:SetTime(seconds)
+	currentTime = seconds
+end
+
+function DifficultyService:GetTime()
+	return currentTime
+end
+
+function DifficultyService:GetDifficultyLevel()
+	local minutes = currentTime / 60
+	return BASE_DIFFICULTY + (minutes * DIFFICULTY_PER_MINUTE)
+end
+
+function DifficultyService:GetStats()
+	local level = DifficultyService:GetDifficultyLevel()
+
+	return {
+		HealthMultiplier = 1 + (level * 0.6),
+		SpeedMultiplier = 1 + (level * 0.15),
+		SpawnMultiplier = 1 + (level * 0.3),
+	}
+end
+
+return DifficultyService

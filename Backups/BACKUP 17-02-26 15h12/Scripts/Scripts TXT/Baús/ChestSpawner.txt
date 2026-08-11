@@ -1,0 +1,103 @@
+local ChestSpawner = {}
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local chestModels = ReplicatedStorage:WaitForChild("ChestsModels")
+
+-- Pasta ativa
+local chestsFolder = Workspace:FindFirstChild("Chests")
+if not chestsFolder then
+	chestsFolder = Instance.new("Folder")
+	chestsFolder.Name = "Chests"
+	chestsFolder.Parent = Workspace
+end
+
+-- =========================
+-- CHANCES BASE
+-- =========================
+local BASE_CHANCES = {
+	Bronze = 60,
+	Silver = 25,
+	Gold = 10,
+	Diamond = 5
+}
+
+-- =========================
+-- ROLL COM LUCK
+-- =========================
+local function rollRarity(player)
+
+	local global = player:FindFirstChild("GlobalStats")
+	local luck = global and global:FindFirstChild("Luck") and global.Luck.Value or 0
+	if global and global:FindFirstChild("Luck") then
+		luck = global.Luck.Value
+	end
+
+	local chances = {}
+	for k, v in pairs(BASE_CHANCES) do
+		chances[k] = v
+	end
+
+	chances.Bronze -= luck * 2
+	chances.Silver += luck * 1
+	chances.Gold += luck * 0.7
+	chances.Diamond += luck * 0.3
+
+	for k, v in pairs(chances) do
+		if v < 0 then
+			chances[k] = 0
+		end
+	end
+
+	local total = 0
+	for _, v in pairs(chances) do
+		total += v
+	end
+
+	local roll = math.random() * total
+	local cumulative = 0
+
+	for rarity, chance in pairs(chances) do
+		cumulative += chance
+		if roll <= cumulative then
+			return rarity
+		end
+	end
+
+	return "Bronze"
+end
+
+-- =========================
+-- SPAWN
+-- =========================
+function ChestSpawner:SpawnChest(position, player)
+
+	local rarity = rollRarity(player)
+
+	local modelName = "Chest_" .. rarity
+	local template = chestModels:FindFirstChild(modelName)
+
+	if not template then
+		warn("Modelo não encontrado:", modelName)
+		return
+	end
+
+	local chest = template:Clone()
+	chest.Parent = chestsFolder
+	chest:ScaleTo(4)
+
+	if not chest.PrimaryPart then
+		warn("Chest sem PrimaryPart:", chest.Name)
+		return
+	end
+
+	chest:SetPrimaryPartCFrame(CFrame.new(position + Vector3.new(0, 0.5, 0)))
+	chest:SetAttribute("Rarity", rarity)
+
+	print("📦 Chest spawnado:", rarity)
+
+	return chest
+end
+
+return ChestSpawner

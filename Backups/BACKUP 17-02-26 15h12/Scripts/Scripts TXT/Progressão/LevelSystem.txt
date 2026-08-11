@@ -1,0 +1,35 @@
+local LevelSystem = {}
+
+-- XP necessário por nível (cresce linear: Level 1=50, 2=100, 3=150...)
+local xpRequired = {}
+for i = 1, 50 do
+	xpRequired[i] = i * 50
+end
+
+function LevelSystem.GetRequiredXP(level)
+	return xpRequired[level] or (level * 50)
+end
+
+function LevelSystem.CheckLevelUp(player)
+	if not player or not player:FindFirstChild("leaderstats") then 
+		return false 
+	end
+
+	local currentLevel = player.leaderstats.Level.Value
+	local currentXP = player.leaderstats.XP.Value
+	local needed = LevelSystem.GetRequiredXP(currentLevel)
+
+	print("[LevelSystem] Checando: Level " .. currentLevel .. " | XP " .. currentXP .. "/" .. needed)  -- Debug
+
+	if currentXP >= needed then
+		-- Subtrai o necessário e sobe nível
+		player.leaderstats.XP.Value = currentXP - needed
+		player.leaderstats.Level.Value = currentLevel + 1
+		print("[LevelSystem] " .. player.Name .. " SUBIU PARA LEVEL " .. player.leaderstats.Level.Value .. "!")
+		return true
+	end
+
+	return false
+end
+
+return LevelSystem
