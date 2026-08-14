@@ -9,7 +9,9 @@ local Debris = game:GetService("Debris")
 local XPService = require(game.ServerScriptService.XPService)
 local DifficultyService = require(game.ServerScriptService.DifficultyService)
 local DamageService = require(game.ServerScriptService.Combat.DamageService)
-local EnemyTimeController = require(game.ServerScriptService.Combat:WaitForChild("EnemyTimeController"))
+local EnemyTimeController = require(
+	game.ServerScriptService.Combat:WaitForChild("EnemyTimeController")
+)
 local GoldService = require(game.ServerScriptService.GoldService)
 
 local GameState = ReplicatedStorage:WaitForChild("GameState")
@@ -22,9 +24,9 @@ _G.Enemies = _G.Enemies or {}
 -- CONFIG BASE
 -------------------------------------------------
 
-local BASE_SPAWN_RATE = 0.8 -- mais rápido
-local BASE_MAX_ENEMIES = 150 -- muito maior
-local BASE_HP = 20 -- mais tanque
+local BASE_SPAWN_RATE = 0.8         -- mais rápido
+local BASE_MAX_ENEMIES = 150         -- muito maior
+local BASE_HP = 20                   -- mais tanque
 local BASE_DAMAGE = 15
 local BASE_SPEED = 10
 local BASE_XP = 10
@@ -49,7 +51,7 @@ end
 local lastSpawn = 0
 
 -------------------------------------------------
--- UTIL
+-- UTIL	
 -------------------------------------------------
 
 local function getPlayerCenter()
@@ -59,19 +61,25 @@ local function getPlayerCenter()
 			return root.Position
 		end
 	end
-	return Vector3.new(0, 5, 0)
+	return Vector3.new(0,5,0)
 end
 local function getRandomSpawnPos()
+
 	local center = getPlayerCenter()
 
 	for attempt = 1, 12 do
+
 		-- 🎯 DIREÇÃO TOTALMENTE ALEATÓRIA
 		local angle = math.random() * math.pi * 2
 
 		-- 📏 DISTÂNCIA SEGURA
 		local dist = math.random(SPAWN_DISTANCE_MIN, SPAWN_DISTANCE_MAX)
 
-		local offset = Vector3.new(math.cos(angle) * dist, 0, math.sin(angle) * dist)
+		local offset = Vector3.new(
+			math.cos(angle) * dist,
+			0,
+			math.sin(angle) * dist
+		)
 
 		local spawnPos = center + offset
 
@@ -114,7 +122,7 @@ local function getRandomSpawnPos()
 		local origin = spawnPos + Vector3.new(0, 100, 0)
 
 		local rayParams = RaycastParams.new()
-		rayParams.FilterDescendantsInstances = { workspace.Enemies }
+		rayParams.FilterDescendantsInstances = {workspace.Enemies}
 		rayParams.FilterType = Enum.RaycastFilterType.Blacklist
 
 		local result = workspace:Raycast(origin, Vector3.new(0, -200, 0), rayParams)
@@ -135,14 +143,14 @@ end
 -------------------------------------------------
 
 local function startEnemyAI(enemyData, baseDamage)
+
 	local humanoid = enemyData.Humanoid
 	local root = enemyData.Root
 	local lastAttack = 0
 
 	enemyData.AIConn = RunService.Heartbeat:Connect(function(dt)
-		if not enemyData.Alive then
-			return
-		end
+
+		if not enemyData.Alive then return end
 
 		if GamePaused.Value or EnemyTimeController:IsFrozen() then
 			humanoid.WalkSpeed = 0
@@ -172,18 +180,25 @@ local function startEnemyAI(enemyData, baseDamage)
 			local slow = EnemyTimeController:GetSlow()
 			local mod = _G.RunModifiers or {}
 
-			humanoid.WalkSpeed = BASE_SPEED * diff.SpeedMultiplier * slow * (mod.EnemySpeed or 1)
-
+			humanoid.WalkSpeed =
+				BASE_SPEED
+				* diff.SpeedMultiplier
+				* slow
+				* (mod.EnemySpeed or 1)
+			
 			humanoid:MoveTo(closestRoot.Position)
 
 			lastAttack += dt
 
 			if minDist <= ATTACK_RANGE and lastAttack >= ATTACK_COOLDOWN then
+
 				local mod = _G.RunModifiers or {}
 
 				DamageService:TryDamagePlayer(
 					root,
-					baseDamage * diff.DamageMultiplier * (mod.EnemyDamage or 1),
+					baseDamage
+						* diff.DamageMultiplier
+						* (mod.EnemyDamage or 1),
 					ATTACK_RANGE
 				)
 
@@ -198,6 +213,7 @@ end
 -------------------------------------------------
 
 local function spawnEnemy()
+
 	-- evita spawn muito perto do player se já tiver muitos próximos
 	local closeCount = 0
 	local playerPos = getPlayerCenter()
@@ -214,9 +230,7 @@ local function spawnEnemy()
 		return
 	end
 
-	if not GameState.RunActive.Value or GamePaused.Value then
-		return
-	end
+	if not GameState.RunActive.Value or GamePaused.Value then return end
 
 	local diff = DifficultyService:GetStats()
 
@@ -224,7 +238,7 @@ local function spawnEnemy()
 	if elapsedValue and elapsedValue.Value then
 		runTime = elapsedValue.Value
 	end
-
+	
 	-- Crescimento suave nos primeiros 3 minutos
 	local timeMultiplier = 1 + math.clamp(runTime / 240, 0, 2)
 
@@ -237,14 +251,10 @@ local function spawnEnemy()
 		end
 	end
 
-	if count >= maxEnemies then
-		return
-	end
+	if count >= maxEnemies then return end
 
 	local template = ReplicatedStorage.Enemies:FindFirstChild("BasicEnemy")
-	if not template then
-		return
-	end
+	if not template then return end
 
 	local enemy = template:Clone()
 	local humanoid = enemy:FindFirstChildOfClass("Humanoid")
@@ -267,7 +277,7 @@ local function spawnEnemy()
 		Alive = true,
 		Root = root,
 		Humanoid = humanoid,
-		Model = enemy,
+		Model = enemy
 	}
 
 	table.insert(_G.Enemies, enemyData)
@@ -279,6 +289,7 @@ local function spawnEnemy()
 	-------------------------------------------------
 
 	humanoid.Died:Connect(function()
+
 		enemyData.Alive = false
 
 		if enemyData.AIConn then
@@ -323,11 +334,11 @@ local function spawnEnemy()
 				local phaseMultiplier = 1
 
 				if minute <= 10 then
-					phaseMultiplier = 1.6 -- early muito forte
+					phaseMultiplier = 1.6  -- early muito forte
 				elseif minute <= 15 then
-					phaseMultiplier = 1.3 -- mid game ainda forte
+					phaseMultiplier = 1.3  -- mid game ainda forte
 				else
-					phaseMultiplier = 1.1 -- late estabiliza
+					phaseMultiplier = 1.1  -- late estabiliza
 				end
 
 				-- crescimento leve contínuo
@@ -335,8 +346,13 @@ local function spawnEnemy()
 
 				local mod = _G.RunModifiers or {}
 
-				local gain =
-					math.floor(BASE_XP * (mod.EnemyXP or 1) * diff.XPMultiplier * phaseMultiplier * timeScaling)
+				local gain = math.floor(
+					BASE_XP
+						* (mod.EnemyXP or 1)
+						* diff.XPMultiplier
+						* phaseMultiplier
+						* timeScaling
+				)
 
 				xp.Value += gain
 
@@ -361,6 +377,7 @@ local function spawnEnemy()
 				ms.EnemiesKilled.Value += 1
 			end
 		end
+		
 	end)
 end
 
@@ -369,9 +386,8 @@ end
 -------------------------------------------------
 
 RunService.Heartbeat:Connect(function(dt)
-	if not GameState.RunActive.Value or GamePaused.Value then
-		return
-	end
+
+	if not GameState.RunActive.Value or GamePaused.Value then return end
 
 	lastSpawn += dt
 	local runTime = elapsedValue.Value or 0
@@ -389,7 +405,10 @@ RunService.Heartbeat:Connect(function(dt)
 	-- Crescimento suave por minuto
 	local densityGrowth = minute * 10
 
-	local maxEnemies = math.floor((baseDensity + densityGrowth) * diff.SpawnMultiplier)
+	local maxEnemies = math.floor(
+		(baseDensity + densityGrowth)
+			* diff.SpawnMultiplier
+	)
 
 	maxEnemies = math.clamp(maxEnemies, 15, 180)
 
@@ -401,9 +420,7 @@ RunService.Heartbeat:Connect(function(dt)
 		end
 	end
 
-	if count >= maxEnemies then
-		return
-	end
+	if count >= maxEnemies then return end
 
 	-- =========================
 	-- ⏱️ CONTROLE DE RITMO
@@ -417,12 +434,12 @@ RunService.Heartbeat:Connect(function(dt)
 
 	local mod = _G.RunModifiers or {}
 
-	local spawnInterval = (baseInterval - intervalDecay) / (mod.SpawnRate or 1)
+	local spawnInterval =
+		(baseInterval - intervalDecay)
+		/ (mod.SpawnRate or 1)
 	spawnInterval = math.clamp(spawnInterval, 0.25, 1)
 
-	if lastSpawn < spawnInterval then
-		return
-	end
+	if lastSpawn < spawnInterval then return end
 
 	-- =========================
 	-- 💥 BURST INTELIGENTE
